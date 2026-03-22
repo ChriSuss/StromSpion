@@ -9,3 +9,6 @@ secrets = LoadStromSpionSecrets();
 # Display the loaded secrets to verify it works
 disp('Loaded secrets:');
 disp(secrets);
+
+# Load the data using the secrets
+data = LoadStromSpionData(secrets);
