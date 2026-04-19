@@ -57,7 +57,7 @@ function data = LoadStromSpionData(secrets)
         error('No data files available to read.');
     else
         disp(['Reading data from ', file_to_read, '...']);
-        data = readtable(file_to_read);
+        data = csvread(file_to_read, 1, 0);
         disp('Data loaded successfully.');
     end
 end
