@@ -28,7 +28,7 @@ function data = LoadStromSpionData(secrets)
 
         if status == 0
             disp(['Success! Data was saved in "', output_file, '".']);
-            % Short preview of the first lines in the console
+            # Short preview of the first lines in the console
             disp('Preview of the file:');
             system(['head -n 5 ' output_file]);
         else
@@ -60,7 +60,7 @@ function data = LoadStromSpionData(secrets)
     try
         data = readtable(file_to_read);
     catch
-        % Fallback
+        # Fallback
         data = csvread(file_to_read, 1, 0);
     end
 
