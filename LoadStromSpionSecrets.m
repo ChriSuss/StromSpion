@@ -5,15 +5,15 @@
 
 function secrets = LoadStromSpionSecrets()
     # Define the path to the secrets file in the parent folder
-    secrets_file = fullfile('..', 'StromSpionSecrets.dat');
+    secretsFile = fullfile('..', 'StromSpionSecrets.dat');
 
     # Check if the file exists before attempting to load
-    if exist(secrets_file, 'file') ~= 2
-        disp(['Secrets file not found: ', secrets_file]);
+    if exist(secretsFile, 'file') ~= 2
+        disp(['Secrets file not found: ', secretsFile]);
         disp('Will now try to generate Secrets with script not maintained in GitHub.');
         run ../CreateStromSpionSecrets.m;       
     end
 
-    secrets = load(secrets_file);
+    secrets = load(secretsFile);
     disp('Successfully loaded StromSpionSecrets.dat from the parent folder.');
 end
