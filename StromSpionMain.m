@@ -12,3 +12,6 @@ disp(secrets);
 
 # Load the data using the secrets
 data = LoadStromSpionData(secrets);
+
+# Refactor the data to add time of day
+data = RefactorStromSpionData(data);

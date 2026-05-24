@@ -6,6 +6,9 @@
 function data = LoadStromSpionData(secrets)
     disp('Loading StromSpion data...');
 
+    # Set to true for quick debugging (limits read lines to 10000)
+    DEBUG = true;
+
     # Example placeholder: using the secrets configuration
     # API_URL,API_KEY and API_CMD are available in the secrets struct
     if isfield(secrets, 'API_URL')
@@ -57,7 +60,18 @@ function data = LoadStromSpionData(secrets)
         error('No data files available to read.');
     else
         disp(['Reading data from ', file_to_read, '...']);
-        data = readtable(file_to_read);
+        try
+            pkg load io; # Ensure the io package is loaded for csv2cell
+        catch
+        end
+        
+        # Use csv2cell to correctly read strings (literals) and numbers without complex value confusion
+        if DEBUG
+            disp('DEBUG mode active: Reading first 10000 lines only.');
+            data = csv2cell(file_to_read, 'A1:F10000');
+        else
+            data = csv2cell(file_to_read);
+        end
         disp('Data loaded successfully.');
     end
 end
