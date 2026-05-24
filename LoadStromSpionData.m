@@ -57,7 +57,13 @@ function data = LoadStromSpionData(secrets)
         error('No data files available to read.');
     else
         disp(['Reading data from ', file_to_read, '...']);
-        data = csvread(file_to_read, 1, 0);
+        try
+            pkg load io; # Ensure the io package is loaded for csv2cell
+        catch
+        end
+        
+        # Use csv2cell to correctly read strings (literals) and numbers without complex value confusion
+        data = csv2cell(file_to_read);
         disp('Data loaded successfully.');
     end
 end
