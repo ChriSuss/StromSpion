@@ -1,16 +1,13 @@
 # ##
 # PlotStromSpionData.m
-# Plots the StromSpion power consumption data in a 2D density heatmap style.
+# Plots the StromSpion power consumption data in 2D density heatmap style
+# for each phase: E_actual_L1, E_actual_L2, and E_actual_L3.
 # The x-axis represents the time of day (seconds since midnight converted to hours),
 # and the y-axis represents the power consumption values.
 # ##
 
 function PlotStromSpionData(data)
-    disp('Plotting data: Generating power consumption heatmap...');
-
-    # Define the expected column names
-    VAL_COL_NAME = '_value';
-    TOD_COL_NAME = '_timeofday';
+    disp('Plotting data: Generating power consumption heatmaps...');
 
     if ~iscell(data) || size(data, 1) < 1
         disp('Warning: Input data is empty or not a cell array. Plotting aborted.');
@@ -37,136 +34,165 @@ function PlotStromSpionData(data)
         start_row = 1;
     end
 
-    # Find the column indices of _value and _timeofday
-    valColIdx = -1;
+    # Find the column indices of _timeofday, E_actual_L1, E_actual_L2, and E_actual_L3
     todColIdx = -1;
+    L1_ColIdx = -1;
+    L2_ColIdx = -1;
+    L3_ColIdx = -1;
 
     if is_header
         for col = 1:length(first_row)
             val = first_row{col};
             if ischar(val) || isstring(val)
                 cleaned_val = strtrim(strrep(char(val), '"', ''));
-                if strcmp(cleaned_val, VAL_COL_NAME)
-                    valColIdx = col;
-                elseif strcmp(cleaned_val, TOD_COL_NAME)
+                if strcmp(cleaned_val, '_timeofday')
                     todColIdx = col;
+                elseif strcmp(cleaned_val, 'E_actual_L1')
+                    L1_ColIdx = col;
+                elseif strcmp(cleaned_val, 'E_actual_L2')
+                    L2_ColIdx = col;
+                elseif strcmp(cleaned_val, 'E_actual_L3')
+                    L3_ColIdx = col;
                 end
             end
         end
     end
 
     # Fallbacks if columns were not found by name
-    if valColIdx == -1
-        valColIdx = 5; % Default column index for _value
-    end
     if todColIdx == -1
-        todColIdx = size(data, 2); % Default to the last column for _timeofday
+        todColIdx = size(data, 2); % Default to the last column
+    end
+    if L1_ColIdx == -1
+        L1_ColIdx = 5;
+    end
+    if L2_ColIdx == -1
+        L2_ColIdx = 6;
+    end
+    if L3_ColIdx == -1
+        L3_ColIdx = 7;
     end
 
-    # Extract cell columns
+    # Define phases to plot
+    phases = {
+        struct('name', 'E_actual_L1', 'idx', L1_ColIdx),
+        struct('name', 'E_actual_L2', 'idx', L2_ColIdx),
+        struct('name', 'E_actual_L3', 'idx', L3_ColIdx)
+    };
+
+    # Try to extract the time column
     try
-        val_cell = data(start_row:end, valColIdx);
         tod_cell = data(start_row:end, todColIdx);
     catch
-        disp('Warning: Column indices exceed data dimensions. Plotting aborted.');
+        disp('Warning: Timeofday column index exceeds data dimensions. Plotting aborted.');
         return;
     end
 
-    # Safely and efficiently extract numeric values using vectorized checks
-    is_num_val = cellfun('isclass', val_cell, 'double');
-    is_num_tod = cellfun('isclass', tod_cell, 'double');
-    valid = is_num_val & is_num_tod;
+    for p = 1:length(phases)
+        phase = phases{p};
+        target_name = phase.name;
+        col_idx = phase.idx;
 
-    if ~any(valid)
-        disp('Warning: No numeric time of day or power consumption values found. Plotting aborted.');
-        return;
+        # Extract phase column
+        try
+            val_cell = data(start_row:end, col_idx);
+        catch
+            disp(['Warning: Column index for ', target_name, ' exceeds data dimensions. Skipping plot.']);
+            continue;
+        end
+
+        # Safely and efficiently check numeric types using cellfun
+        is_num_val = cellfun('isclass', val_cell, 'double');
+        is_num_tod = cellfun('isclass', tod_cell, 'double');
+        valid = is_num_val & is_num_tod;
+
+        if ~any(valid)
+            disp(['Warning: No valid numeric data found for ', target_name, '. Skipping plot.']);
+            continue;
+        end
+
+        # Convert cell arrays to double arrays
+        Y = cell2mat(val_cell(valid));
+        X_sec = cell2mat(tod_cell(valid));
+
+        # Convert seconds since midnight to hours
+        X = X_sec / 3600;
+
+        # Clean NaNs
+        valid_data = ~isnan(X) & ~isnan(Y);
+        X = X(valid_data);
+        Y = Y(valid_data);
+
+        if isempty(X)
+            disp(['Warning: No valid data points for ', target_name, ' after filtering NaNs. Skipping plot.']);
+            continue;
+        end
+
+        disp(['Processing ', num2str(length(X)), ' data points for ', target_name, '...']);
+
+        # Define 2D histogram bins
+        num_x_bins = 96; # 15-minute intervals
+        num_y_bins = 100;
+
+        # Compute bin edges
+        x_edges = linspace(0, 24, num_x_bins + 1);
+        y_edges = linspace(min(Y), max(Y), num_y_bins + 1);
+
+        # Find bin index for each data point
+        [~, x_bin] = histc(X, x_edges);
+        [~, y_bin] = histc(Y, y_edges);
+
+        # Clamp indices to [1, num_bins]
+        x_bin(x_bin > num_x_bins) = num_x_bins;
+        y_bin(y_bin > num_y_bins) = num_y_bins;
+
+        # Keep only valid bins
+        valid_bins = (x_bin > 0) & (y_bin > 0);
+        x_bin = x_bin(valid_bins);
+        y_bin = y_bin(valid_bins);
+
+        if isempty(x_bin)
+            disp(['Warning: No data points fell into valid bins for ', target_name, '. Skipping plot.']);
+            continue;
+        end
+
+        # Accumulate counts
+        H = accumarray([y_bin, x_bin], 1, [num_y_bins, num_x_bins]);
+
+        # Compute bin centers
+        x_centers = x_edges(1:end-1) + diff(x_edges)/2;
+        y_centers = y_edges(1:end-1) + diff(y_edges)/2;
+
+        # Create headless figure
+        hFig = figure('Visible', 'off');
+
+        # Plot 2D density grid with logarithmic scale
+        imagesc(x_centers, y_centers, log10(H + 1));
+
+        # Styling
+        colormap('jet');
+        hCb = colorbar;
+        ylabel(hCb, 'Log10(Data point count + 1)');
+        set(gca, 'YDir', 'normal');
+
+        xlabel('Time of Day (Hours since Midnight)');
+        ylabel('Power Consumption (W)');
+        title(['Heatmap of Power Consumption (', target_name, ') over Time of Day']);
+
+        # Grid and tick layout
+        grid on;
+        set(gca, 'XTick', 0:2:24);
+        xlim([0, 24]);
+
+        # Save to high-resolution PNG file
+        output_png = sprintf('stromspion_heatmap_%s.png', target_name);
+        try
+            print(hFig, output_png, '-dpng', '-r150');
+            disp(['Success! Heatmap plot for ', target_name, ' saved to "', output_png, '".']);
+        catch e
+            disp(['Error occurred while saving plot for ', target_name, ': ', e.message]);
+        end
+
+        # Clean up
+        close(hFig);
     end
-
-    # Convert cell arrays of double to double arrays
-    Y = cell2mat(val_cell(valid));
-    X_sec = cell2mat(tod_cell(valid));
-
-    # Convert seconds since midnight to hours
-    X = X_sec / 3600;
-
-    # Filter out any NaN values that might remain
-    valid_data = ~isnan(X) & ~isnan(Y);
-    X = X(valid_data);
-    Y = Y(valid_data);
-
-    if isempty(X)
-        disp('Warning: No valid data points to plot after filtering NaNs. Plotting aborted.');
-        return;
-    end
-
-    disp(['Processing ', num2str(length(X)), ' data points for plotting...']);
-
-    # Define the number of bins for the 2D histogram
-    # 96 bins for x-axis represents 15-minute intervals (24 hours * 4)
-    num_x_bins = 96;
-    num_y_bins = 100;
-
-    # Compute bin edges
-    x_edges = linspace(0, 24, num_x_bins + 1);
-    y_edges = linspace(min(Y), max(Y), num_y_bins + 1);
-
-    # Find the bin index for each data point
-    [~, x_bin] = histc(X, x_edges);
-    [~, y_bin] = histc(Y, y_edges);
-
-    # Clamp indices to [1, num_bins]
-    x_bin(x_bin > num_x_bins) = num_x_bins;
-    y_bin(y_bin > num_y_bins) = num_y_bins;
-
-    # Keep only valid bins (indices > 0)
-    valid_bins = (x_bin > 0) & (y_bin > 0);
-    x_bin = x_bin(valid_bins);
-    y_bin = y_bin(valid_bins);
-
-    if isempty(x_bin)
-        disp('Warning: No data points fell into valid bins. Plotting aborted.');
-        return;
-    end
-
-    # Accumulate counts into a 2D grid matrix
-    H = accumarray([y_bin, x_bin], 1, [num_y_bins, num_x_bins]);
-
-    # Compute bin centers for axes labeling
-    x_centers = x_edges(1:end-1) + diff(x_edges)/2;
-    y_centers = y_edges(1:end-1) + diff(y_edges)/2;
-
-    # Create figure
-    hFig = figure('Visible', 'off'); % Create headless figure to avoid showing GUI window during runs
-
-    # Use imagesc to plot the 2D density grid
-    # A logarithmic scale log10(H + 1) is used to compress high-density peaks 
-    # and reveal the structure in lower-density regions.
-    imagesc(x_centers, y_centers, log10(H + 1));
-
-    # Styling and aesthetics
-    colormap('jet');
-    hCb = colorbar;
-    ylabel(hCb, 'Log10(Data point count + 1)');
-    set(gca, 'YDir', 'normal'); % Normal Y direction (increasing upwards)
-
-    xlabel('Time of Day (Hours since Midnight)');
-    ylabel('Power Consumption (W)');
-    title('Heatmap of Power Consumption over Time of Day');
-
-    # Grid and tick layout
-    grid on;
-    set(gca, 'XTick', 0:2:24);
-    xlim([0, 24]);
-
-    # Save to a high-resolution PNG file
-    output_png = 'stromspion_heatmap.png';
-    try
-        print(hFig, output_png, '-dpng', '-r150');
-        disp(['Success! Heatmap plot saved to "', output_png, '".']);
-    catch e
-        disp(['Error occurred while saving plot: ', e.message]);
-    end
-
-    # Clean up figure memory
-    close(hFig);
 end
