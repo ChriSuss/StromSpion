@@ -68,7 +68,7 @@ function data = LoadStromSpionData(secrets)
         # Use csv2cell to correctly read strings (literals) and numbers without complex value confusion
         if DEBUG
             disp('DEBUG mode active: Reading first 10000 lines only.');
-            data = csv2cell(file_to_read, 'A1:F10000');
+            data = csv2cell(file_to_read, 'A1:G10000');
         else
             data = csv2cell(file_to_read);
         end
