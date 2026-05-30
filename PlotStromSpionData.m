@@ -1,7 +1,7 @@
 # ##
 # PlotStromSpionData.m
 # Plots the StromSpion power consumption data in 2D density heatmap style
-# for each phase: E_actual_L1, E_actual_L2, and E_actual_L3.
+# for E_actual, E_actual_L1, E_actual_L2, and E_actual_L3.
 # The x-axis represents the time of day (seconds since midnight converted to hours),
 # and the y-axis represents the power consumption values.
 # ##
@@ -34,8 +34,9 @@ function PlotStromSpionData(data)
         start_row = 1;
     end
 
-    # Find the column indices of _timeofday, E_actual_L1, E_actual_L2, and E_actual_L3
+    # Find the column indices of _timeofday, E_actual, E_actual_L1, E_actual_L2, and E_actual_L3
     todColIdx = -1;
+    totColIdx = -1;
     L1_ColIdx = -1;
     L2_ColIdx = -1;
     L3_ColIdx = -1;
@@ -47,6 +48,8 @@ function PlotStromSpionData(data)
                 cleaned_val = strtrim(strrep(char(val), '"', ''));
                 if strcmp(cleaned_val, '_timeofday')
                     todColIdx = col;
+                elseif strcmp(cleaned_val, 'E_actual')
+                    totColIdx = col;
                 elseif strcmp(cleaned_val, 'E_actual_L1')
                     L1_ColIdx = col;
                 elseif strcmp(cleaned_val, 'E_actual_L2')
@@ -62,22 +65,33 @@ function PlotStromSpionData(data)
     if todColIdx == -1
         todColIdx = size(data, 2); % Default to the last column
     end
+    if totColIdx == -1
+        totColIdx = 5;
+    end
     if L1_ColIdx == -1
-        L1_ColIdx = 5;
+        L1_ColIdx = 6;
     end
     if L2_ColIdx == -1
-        L2_ColIdx = 6;
+        L2_ColIdx = 7;
     end
     if L3_ColIdx == -1
-        L3_ColIdx = 7;
+        L3_ColIdx = 8;
     end
 
-    # Define phases to plot
-    phases = {
-        struct('name', 'E_actual_L1', 'idx', L1_ColIdx),
-        struct('name', 'E_actual_L2', 'idx', L2_ColIdx),
-        struct('name', 'E_actual_L3', 'idx', L3_ColIdx)
-    };
+    # Define phases/vectors to plot
+    phases = {};
+    if totColIdx ~= -1 && totColIdx <= size(data, 2)
+        phases{end+1} = struct('name', 'E_actual', 'idx', totColIdx);
+    end
+    if L1_ColIdx ~= -1 && L1_ColIdx <= size(data, 2)
+        phases{end+1} = struct('name', 'E_actual_L1', 'idx', L1_ColIdx);
+    end
+    if L2_ColIdx ~= -1 && L2_ColIdx <= size(data, 2)
+        phases{end+1} = struct('name', 'E_actual_L2', 'idx', L2_ColIdx);
+    end
+    if L3_ColIdx ~= -1 && L3_ColIdx <= size(data, 2)
+        phases{end+1} = struct('name', 'E_actual_L3', 'idx', L3_ColIdx);
+    end
 
     # Try to extract the time column
     try
@@ -130,8 +144,8 @@ function PlotStromSpionData(data)
         disp(['Processing ', num2str(length(X)), ' data points for ', target_name, '...']);
 
         # Define 2D histogram bins
-        num_x_bins = 96; # 15-minute intervals
-        num_y_bins = 100;
+        num_x_bins = 3*96; # 5-minute intervals
+        num_y_bins = 300; # ~10W in range up to 3kW
 
         # Compute bin edges
         x_edges = linspace(0, 24, num_x_bins + 1);
