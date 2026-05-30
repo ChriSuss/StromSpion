@@ -15,3 +15,7 @@ data = LoadStromSpionData(secrets);
 
 # Refactor the data to add time of day
 data = RefactorStromSpionData(data);
+
+# Plot the refactored data
+PlotStromSpionData(data);
+

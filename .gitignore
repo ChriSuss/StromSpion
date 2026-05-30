@@ -1,2 +1,4 @@
 *.csv
+octave-workspace
 octave-workspace.*
+*.png
