@@ -4,6 +4,7 @@
 # for E_actual, E_actual_L1, E_actual_L2, and E_actual_L3.
 # The x-axis represents the time of day (seconds since midnight converted to hours),
 # and the y-axis represents the power consumption values.
+# Uses a logarithmic y-axis scale for natural resolution scaling (high detail for low power).
 # ##
 
 function PlotStromSpionData(data)
@@ -143,17 +144,24 @@ function PlotStromSpionData(data)
 
         disp(['Processing ', num2str(length(X)), ' data points for ', target_name, '...']);
 
-        # Define 2D histogram bins
-        num_x_bins = 3*96; # 5-minute intervals
-        num_y_bins = 300; # ~10W in range up to 3kW
-
-        # Compute bin edges
+        # Define 2D histogram bins (time of day uses 5-minute intervals)
+        num_x_bins = 3 * 96; 
         x_edges = linspace(0, 24, num_x_bins + 1);
-        y_edges = linspace(min(Y), max(Y), num_y_bins + 1);
+
+        # Logarithmic y-axis bin edges to natively scale the resolution
+        # We use log10(val + 1) to handle zero consumption values gracefully
+        y_min = max(0, min(Y));
+        y_max = max(Y);
+        
+        num_y_bins = 300;
+        y_edges_log = linspace(log10(y_min + 1), log10(y_max + 1), num_y_bins + 1);
+
+        # Transform target values to log10 space for binning
+        Y_log = log10(Y + 1);
 
         # Find bin index for each data point
         [~, x_bin] = histc(X, x_edges);
-        [~, y_bin] = histc(Y, y_edges);
+        [~, y_bin] = histc(Y_log, y_edges_log);
 
         # Clamp indices to [1, num_bins]
         x_bin(x_bin > num_x_bins) = num_x_bins;
@@ -172,15 +180,15 @@ function PlotStromSpionData(data)
         # Accumulate counts
         H = accumarray([y_bin, x_bin], 1, [num_y_bins, num_x_bins]);
 
-        # Compute bin centers
+        # Compute bin centers in log space for plotting coordinates
         x_centers = x_edges(1:end-1) + diff(x_edges)/2;
-        y_centers = y_edges(1:end-1) + diff(y_edges)/2;
+        y_centers_log = y_edges_log(1:end-1) + diff(y_edges_log)/2;
 
         # Create headless figure
         hFig = figure('Visible', 'off');
 
-        # Plot 2D density grid with logarithmic scale
-        imagesc(x_centers, y_centers, log10(H + 1));
+        # Plot 2D density grid with logarithmic density scale
+        imagesc(x_centers, y_centers_log, log10(H + 1));
 
         # Styling
         colormap('jet');
@@ -188,14 +196,40 @@ function PlotStromSpionData(data)
         ylabel(hCb, 'Log10(Data point count + 1)');
         set(gca, 'YDir', 'normal');
 
+        # Set human-readable tick marks in Watts on the logarithmic y-axis
+        cand_ticks = [0, 10, 20, 50, 100, 200, 350, 500, 750, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000];
+        active_ticks = cand_ticks(cand_ticks >= y_min & cand_ticks <= y_max);
+        
+        # Fallback if range is very narrow
+        if length(active_ticks) < 2
+            active_ticks = linspace(y_min, y_max, 5);
+        end
+        
+        # Format labels
+        tick_labels = cell(1, length(active_ticks));
+        for i = 1:length(active_ticks)
+            val = round(active_ticks(i));
+            if val >= 1000
+                tick_labels{i} = [num2str(val/1000), 'k'];
+            else
+                tick_labels{i} = num2str(val);
+            end
+        end
+
+        # Set tick locations and labels in log10 space
+        set(gca, 'YTick', log10(active_ticks + 1));
+        set(gca, 'YTickLabel', tick_labels);
+
+        xlim([0, 24]);
+        ylim([log10(y_min + 1), log10(y_max + 1)]);
+
         xlabel('Time of Day (Hours since Midnight)');
-        ylabel('Power Consumption (W)');
+        ylabel('Power Consumption (W, Log Scale)');
         title(['Heatmap of Power Consumption (', target_name, ') over Time of Day']);
 
         # Grid and tick layout
         grid on;
         set(gca, 'XTick', 0:2:24);
-        xlim([0, 24]);
 
         # Save to high-resolution PNG file
         output_png = sprintf('stromspion_heatmap_%s.png', target_name);
